@@ -1,8 +1,8 @@
 # Notes
 
-Personal React + Express app for saving links and formatted text notes into a JSON file.
+Личное приложение на React + Express для сохранения ссылок и текстовых заметок в JSON-файл.
 
-## Local Run
+## Локальный Запуск
 
 ```bash
 npm install
@@ -10,13 +10,13 @@ npm run build
 npm start
 ```
 
-Open `http://127.0.0.1:3001`.
+Открой `http://127.0.0.1:3001`.
 
-Default local password is `notes` when `NOTES_PASSWORD` is not set.
+Если `NOTES_PASSWORD` не задан, локальный пароль по умолчанию: `notes`.
 
-## Environment Variables
+## Переменные Окружения
 
-Use real values on the server:
+На сервере используй реальные значения:
 
 ```bash
 PORT=3001
@@ -26,24 +26,24 @@ COOKIE_SECURE=false
 NOTES_DATA_DIR=/var/www/notes/shared
 ```
 
-Set `COOKIE_SECURE=true` only after HTTPS is configured.
+Включай `COOKIE_SECURE=true` только после настройки HTTPS.
 
-`NOTES_DATA_DIR` is where `notes.json` will be stored. Keep it outside temporary build folders so notes survive deploys.
+`NOTES_DATA_DIR` - папка, где будет храниться `notes.json`. Держи ее вне временных папок сборки, чтобы заметки не терялись при обновлениях.
 
-## VPS Deploy
+## Деплой На VPS
 
-Example for Ubuntu server.
+Пример для Ubuntu-сервера.
 
-### 1. Install Node.js
+### 1. Установить Node.js
 
-Install Node.js 22+ from NodeSource or your VPS provider image.
+Установи Node.js 22+ через NodeSource или образ провайдера VPS.
 
 ```bash
 node --version
 npm --version
 ```
 
-### 2. Clone The Project
+### 2. Склонировать Проект
 
 ```bash
 sudo mkdir -p /var/www
@@ -53,7 +53,7 @@ git clone -b codex/notes-app https://github.com/d1m4a/notes.git
 cd notes
 ```
 
-### 3. Configure Environment
+### 3. Настроить Окружение
 
 ```bash
 mkdir -p /var/www/notes/shared
@@ -61,16 +61,16 @@ cp .env.example .env
 nano .env
 ```
 
-Edit `.env` and set your real `NOTES_PASSWORD` and `SESSION_SECRET`.
+В `.env` задай свои реальные `NOTES_PASSWORD` и `SESSION_SECRET`.
 
-### 4. Build
+### 4. Собрать Проект
 
 ```bash
 npm install
 npm run build
 ```
 
-### 5. Run With pm2
+### 5. Запустить Через pm2
 
 ```bash
 sudo npm install -g pm2
@@ -79,9 +79,9 @@ pm2 save
 pm2 startup
 ```
 
-After `pm2 startup`, run the command that pm2 prints.
+После `pm2 startup` выполни команду, которую напечатает pm2.
 
-Useful commands:
+Полезные команды:
 
 ```bash
 pm2 status
@@ -89,7 +89,7 @@ pm2 logs notes
 pm2 restart notes --update-env
 ```
 
-### 6. Update Deploy
+### 6. Обновить Приложение
 
 ```bash
 cd /var/www/notes
@@ -101,7 +101,7 @@ pm2 restart notes --update-env
 
 ## Nginx Reverse Proxy
 
-Create `/etc/nginx/sites-available/notes`:
+Создай файл `/etc/nginx/sites-available/notes`:
 
 ```nginx
 server {
@@ -118,7 +118,7 @@ server {
 }
 ```
 
-Enable it:
+Включи конфиг:
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/notes /etc/nginx/sites-enabled/notes
@@ -126,14 +126,14 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-For HTTPS:
+Для HTTPS:
 
 ```bash
 sudo apt install certbot python3-certbot-nginx
 sudo certbot --nginx -d your-domain.com
 ```
 
-After HTTPS works, set `COOKIE_SECURE=true` in `.env` and restart:
+Когда HTTPS заработает, поставь `COOKIE_SECURE=true` в `.env` и перезапусти приложение:
 
 ```bash
 pm2 restart notes --update-env
