@@ -7,6 +7,8 @@ import {
   ExternalLink,
   Eye,
   Link as LinkIcon,
+  LogOut,
+  Lock,
   NotebookPen,
   Plus,
   RotateCcw,
@@ -15,6 +17,9 @@ import {
 import './styles.css';
 
 const API_URL = '/api/notes';
+const SESSION_URL = '/api/session';
+const LOGIN_URL = '/api/login';
+const LOGOUT_URL = '/api/logout';
 
 function normalizeUrl(value) {
   if (/^https?:\/\//i.test(value)) {
@@ -39,6 +44,9 @@ function App() {
   const [editingId, setEditingId] = useState(null);
   const [status, setStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [password, setPassword] = useState('');
 
   const editingNote = useMemo(
     () => notes.find((note) => note.id === editingId),
@@ -53,6 +61,11 @@ function App() {
       const response = await fetch(API_URL);
       const data = await response.json();
 
+      if (response.status === 401) {
+        setIsAuthenticated(false);
+        throw new Error(data.error || 'Требуется вход.');
+      }
+
       if (!response.ok) {
         throw new Error(data.error || 'Не удалось загрузить записи.');
       }
@@ -66,8 +79,56 @@ function App() {
   }
 
   useEffect(() => {
-    loadNotes();
+    async function checkSession() {
+      try {
+        const response = await fetch(SESSION_URL);
+        const data = await response.json();
+        setIsAuthenticated(Boolean(data.authenticated));
+
+        if (data.authenticated) {
+          await loadNotes();
+        }
+      } catch (error) {
+        setStatus(error.message);
+      } finally {
+        setIsCheckingSession(false);
+      }
+    }
+
+    checkSession();
   }, []);
+
+  async function handleLogin(event) {
+    event.preventDefault();
+    setStatus('');
+
+    try {
+      const response = await fetch(LOGIN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Не удалось войти.');
+      }
+
+      setPassword('');
+      setIsAuthenticated(true);
+      await loadNotes();
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
+
+  async function handleLogout() {
+    await fetch(LOGOUT_URL, { method: 'POST' });
+    setIsAuthenticated(false);
+    setNotes([]);
+    resetForm();
+    setMode('add');
+  }
 
   function resetForm() {
     setType('link');
@@ -159,30 +220,66 @@ function App() {
             <h1>Ссылки и тексты</h1>
           </div>
 
-          <div className="mode-switch" aria-label="Режим приложения">
-            <button
-              className={mode === 'add' ? 'active' : ''}
-              type="button"
-              onClick={() => setMode('add')}
-            >
-              <Plus size={18} />
-              Добавить
-            </button>
-            <button
-              className={mode === 'view' ? 'active' : ''}
-              type="button"
-              onClick={() => {
-                setMode('view');
-                loadNotes();
-              }}
-            >
-              <Eye size={18} />
-              Просмотр
-            </button>
-          </div>
+          {isAuthenticated ? (
+            <div className="mode-switch" aria-label="Режим приложения">
+              <button
+                className={mode === 'add' ? 'active' : ''}
+                type="button"
+                onClick={() => setMode('add')}
+              >
+                <Plus size={18} />
+                Добавить
+              </button>
+              <button
+                className={mode === 'view' ? 'active' : ''}
+                type="button"
+                onClick={() => {
+                  setMode('view');
+                  loadNotes();
+                }}
+              >
+                <Eye size={18} />
+                Просмотр
+              </button>
+            </div>
+          ) : null}
         </header>
 
-        {mode === 'add' ? (
+        {isCheckingSession ? (
+          <section className="auth-panel">
+            <p className="muted">Проверка входа...</p>
+          </section>
+        ) : !isAuthenticated ? (
+          <form className="auth-panel" onSubmit={handleLogin}>
+            <div className="panel-heading">
+              <Lock size={22} />
+              <div>
+                <h2>Вход</h2>
+                <p>Доступ только по личному паролю.</p>
+              </div>
+            </div>
+
+            <label className="field">
+              <span>Пароль</span>
+              <input
+                autoFocus
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Введите пароль"
+                type="password"
+                value={password}
+              />
+            </label>
+
+            <div className="actions">
+              <button className="primary" type="submit">
+                <Check size={18} />
+                Войти
+              </button>
+            </div>
+
+            {status ? <p className="status">{status}</p> : null}
+          </form>
+        ) : mode === 'add' ? (
           <form className="editor" onSubmit={handleSubmit}>
             <div className="panel-heading">
               <NotebookPen size={22} />
@@ -309,6 +406,13 @@ function App() {
             </div>
           </section>
         )}
+
+        {isAuthenticated ? (
+          <button className="logout-button" onClick={handleLogout} type="button">
+            <LogOut size={17} />
+            Выйти
+          </button>
+        ) : null}
       </section>
     </main>
   );

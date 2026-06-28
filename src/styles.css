@@ -101,7 +101,8 @@ h2 {
 }
 
 .editor,
-.viewer {
+.viewer,
+.auth-panel {
   padding-top: 28px;
 }
 
@@ -242,6 +243,14 @@ time {
 .danger {
   background: #c97365;
   color: #fffaf3;
+}
+
+.logout-button {
+  background: transparent;
+  color: #826f61;
+  margin-top: 28px;
+  min-height: 38px;
+  padding: 0;
 }
 
 .status {

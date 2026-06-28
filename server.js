@@ -11,6 +11,9 @@ const app = express();
 const port = process.env.PORT || 3001;
 const dataDir = path.join(__dirname, 'data');
 const dataFile = path.join(dataDir, 'notes.json');
+const authPassword = process.env.NOTES_PASSWORD || 'notes';
+const sessionSecret = process.env.SESSION_SECRET || 'local-notes-session-secret';
+const sessionMaxAgeMs = 1000 * 60 * 60 * 24 * 30;
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
@@ -51,6 +54,122 @@ function cleanNotePayload(body) {
 
   return { type, content };
 }
+
+function parseCookies(header = '') {
+  return header.split(';').reduce((cookies, part) => {
+    const [name, ...valueParts] = part.trim().split('=');
+
+    if (!name) {
+      return cookies;
+    }
+
+    cookies[name] = decodeURIComponent(valueParts.join('='));
+    return cookies;
+  }, {});
+}
+
+function sign(value) {
+  return crypto.createHmac('sha256', sessionSecret).update(value).digest('base64url');
+}
+
+function createSessionToken() {
+  const payload = JSON.stringify({
+    exp: Date.now() + sessionMaxAgeMs,
+    nonce: crypto.randomUUID()
+  });
+  const encodedPayload = Buffer.from(payload).toString('base64url');
+  return `${encodedPayload}.${sign(encodedPayload)}`;
+}
+
+function isValidSessionToken(token) {
+  if (!token || !token.includes('.')) {
+    return false;
+  }
+
+  const [encodedPayload, signature] = token.split('.');
+  const expectedSignature = sign(encodedPayload);
+  const signatureBuffer = Buffer.from(signature);
+  const expectedSignatureBuffer = Buffer.from(expectedSignature);
+
+  if (signatureBuffer.length !== expectedSignatureBuffer.length) {
+    return false;
+  }
+
+  if (!crypto.timingSafeEqual(signatureBuffer, expectedSignatureBuffer)) {
+    return false;
+  }
+
+  try {
+    const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
+    return Number(payload.exp) > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+function isPasswordMatch(candidate) {
+  const password = Buffer.from(authPassword);
+  const input = Buffer.from(String(candidate ?? ''));
+
+  if (password.length !== input.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(password, input);
+}
+
+function sessionCookie(value, maxAge) {
+  const parts = [
+    `notes_session=${encodeURIComponent(value)}`,
+    'HttpOnly',
+    'SameSite=Lax',
+    'Path=/',
+    `Max-Age=${maxAge}`
+  ];
+
+  if (process.env.COOKIE_SECURE === 'true') {
+    parts.push('Secure');
+  }
+
+  return parts.join('; ');
+}
+
+function requireAuth(req, res, next) {
+  const cookies = parseCookies(req.headers.cookie);
+
+  if (!isValidSessionToken(cookies.notes_session)) {
+    res.status(401).json({ error: 'Требуется вход.' });
+    return;
+  }
+
+  next();
+}
+
+if (!process.env.NOTES_PASSWORD) {
+  console.warn('NOTES_PASSWORD is not set. Temporary local password is "notes".');
+}
+
+app.get('/api/session', (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  res.json({ authenticated: isValidSessionToken(cookies.notes_session) });
+});
+
+app.post('/api/login', (req, res) => {
+  if (!isPasswordMatch(req.body?.password)) {
+    res.status(401).json({ error: 'Неверный пароль.' });
+    return;
+  }
+
+  res.setHeader('Set-Cookie', sessionCookie(createSessionToken(), sessionMaxAgeMs / 1000));
+  res.json({ authenticated: true });
+});
+
+app.post('/api/logout', (_req, res) => {
+  res.setHeader('Set-Cookie', sessionCookie('', 0));
+  res.status(204).send();
+});
+
+app.use('/api/notes', requireAuth);
 
 app.get('/api/notes', async (_req, res) => {
   try {
